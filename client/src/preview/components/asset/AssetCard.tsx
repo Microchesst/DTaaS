@@ -1,13 +1,23 @@
 import * as React from 'react';
-import { useState, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, Dispatch, SetStateAction } from 'react';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
-import { AlertColor, CardActions, Grid } from '@mui/material';
+import {
+  AlertColor,
+  CardActions,
+  Grid,
+  Button,
+  Box,
+  IconButton,
+  Tooltip,
+  CircularProgress,
+} from '@mui/material';
+import { Visibility, Refresh as RefreshIcon } from '@mui/icons-material';
 import styled from '@emotion/styled';
 import { formatName } from 'preview/util/digitalTwin';
 import CustomSnackbar from 'preview/route/digitaltwins/Snackbar';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { selectDigitalTwinByName } from 'preview/store/digitalTwin.slice';
 import { RootState } from 'store/store';
 import LogDialog from 'preview/route/digitaltwins/execute/LogDialog';
@@ -15,8 +25,7 @@ import DetailsDialog from 'preview/route/digitaltwins/manage/DetailsDialog';
 import ReconfigureDialog from 'preview/route/digitaltwins/manage/ReconfigureDialog';
 import DeleteDialog from 'preview/route/digitaltwins/manage/DeleteDialog';
 import { selectAssetByPathAndPrivacy } from 'preview/store/assets.slice';
-import StartStopButton from './StartStopButton';
-import LogButton from './LogButton';
+import ExecutionsList from 'preview/route/digitaltwins/execute/ExecutionsList';
 import { Asset } from './Asset';
 import DetailsButton from './DetailsButton';
 import ReconfigureButton from './ReconfigureButton';
@@ -124,20 +133,45 @@ function CardButtonsContainerManage({
 }
 
 function CardButtonsContainerExecute({
-  assetName,
   setShowLog,
-}: CardButtonsContainerExecuteProps) {
-  const [logButtonDisabled, setLogButtonDisabled] = useState(true);
+}: Omit<CardButtonsContainerExecuteProps, 'assetName'>) {
+  const dispatch = useDispatch();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleCheckAllExecutions = () => {
+    setIsRefreshing(true);
+    // Trigger a global check of all running executions
+    dispatch({ type: 'digitalTwin/checkAllRunningExecutions' });
+
+    // Reset the refreshing state after a short delay
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
+
   return (
     <CardActions style={{ justifyContent: 'flex-end' }}>
-      <StartStopButton
-        assetName={assetName}
-        setLogButtonDisabled={setLogButtonDisabled}
-      />
-      <LogButton
-        setShowLog={setShowLog}
-        logButtonDisabled={logButtonDisabled}
-      />
+      <Tooltip title="Check all running executions">
+        <IconButton
+          size="small"
+          onClick={handleCheckAllExecutions}
+          disabled={isRefreshing}
+          sx={{ mr: 1 }}
+        >
+          {isRefreshing ? (
+            <CircularProgress size={18} />
+          ) : (
+            <RefreshIcon fontSize="small" color="primary" />
+          )}
+        </IconButton>
+      </Tooltip>
+      <Button
+        variant="contained"
+        size="small"
+        color="primary"
+        onClick={() => setShowLog(true)}
+        startIcon={<Visibility />}
+      >
+        View Logs
+      </Button>
     </CardActions>
   );
 }
@@ -226,27 +260,71 @@ function AssetCardManage({ asset, onDelete }: AssetCardManageProps) {
 }
 
 function AssetCardExecute({ asset }: AssetCardProps) {
-  useState<AlertColor>('success');
   const [showLog, setShowLog] = useState(false);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(
+    null,
+  );
   const digitalTwin = useSelector(selectDigitalTwinByName(asset.name));
+  const [, forceUpdate] = useState({});
+
+  // Auto-refresh card to keep executions list updated
+  useEffect(() => {
+    const refreshTimer = setInterval(() => {
+      forceUpdate({});
+    }, 3000);
+
+    return () => clearInterval(refreshTimer);
+  }, []);
+
+  const handleShowLogs = (executionId: string) => {
+    setSelectedExecutionId(executionId);
+    setShowLog(true);
+  };
 
   return (
     digitalTwin && (
       <>
-        <AssetCard
-          asset={asset}
-          buttons={
-            <CardButtonsContainerExecute
-              assetName={asset.name}
-              setShowLog={setShowLog}
+        <Card
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 235,
+            justifyContent: 'space-between',
+            padding: '5px 10px 5px 10px',
+          }}
+        >
+          <Header variant="h6">{formatName(asset.name)}</Header>
+          <CardActionAreaContainer {...asset} />
+
+          {/* ExecutionsList with improved styling */}
+          <Box
+            sx={{
+              flexGrow: 1,
+              maxHeight: '250px',
+              overflowY: 'auto',
+              mt: 1,
+              mb: 1,
+              px: 1,
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <ExecutionsList
+              digitalTwinId={asset.name}
+              onShowLogs={handleShowLogs}
             />
-          }
-        />
+          </Box>
+
+          <CardButtonsContainerExecute setShowLog={setShowLog} />
+        </Card>
         <CustomSnackbar />
         <LogDialog
           showLog={showLog}
           setShowLog={setShowLog}
           name={asset.name}
+          selectedExecutionId={selectedExecutionId}
         />
       </>
     )

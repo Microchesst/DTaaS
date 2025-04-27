@@ -5,6 +5,7 @@ import { getAuthority } from 'util/envUtil';
 import { FileState } from 'preview/store/file.slice';
 import { LibraryConfigFile } from 'preview/store/libraryConfigFiles.slice';
 import { RUNNER_TAG } from 'model/backend/gitlab/constants';
+import { JobLog } from 'preview/components/asset/StartStopButton';
 import GitlabInstance from './gitlab';
 import {
   isValidInstance,
@@ -17,6 +18,16 @@ import LibraryAsset from './libraryAsset';
 
 export const formatName = (name: string) =>
   name.replace(/-/g, ' ').replace(/^./, (char) => char.toUpperCase());
+
+// Interface for execution instances
+export interface ExecutionInstance {
+  id: string; // Unique identifier for this execution
+  pipelineId: number | null; // GitLab pipeline ID
+  startTime: number; // Timestamp when execution started
+  jobLogs: JobLog[]; // Logs for this execution
+  status: 'running' | 'completed' | 'failed' | 'canceled';
+  name: string; // Display name for this execution (e.g., timestamp-based)
+}
 
 class DigitalTwin {
   public DTName: string;
@@ -46,6 +57,11 @@ class DigitalTwin {
   public lifecycleFiles: string[] = [];
 
   public assetFiles: { assetPath: string; fileNames: string[] }[] = [];
+
+  // New properties for multiple executions
+  public executions: ExecutionInstance[] = [];
+
+  public currentExecutionId: string | null = null;
 
   constructor(DTName: string, gitlabInstance: GitlabInstance) {
     this.DTName = DTName;
