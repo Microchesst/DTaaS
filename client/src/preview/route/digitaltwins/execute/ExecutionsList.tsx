@@ -25,6 +25,10 @@ import {
   setCurrentExecution,
   removeExecution,
 } from '../../../store/digitalTwin.slice';
+import {
+  selectExecutionsLoading,
+  selectExecutionsError,
+} from '../../../store/executionsLoadingState';
 import { cancelPipeline } from './pipelineCancel';
 import { handleStart } from './pipelineHandler';
 
@@ -36,6 +40,8 @@ const ExecutionsList: React.FC<{
   const digitalTwin = useSelector(
     (state: RootState) => state.digitalTwin.digitalTwin[digitalTwinId],
   );
+  const isLoading = useSelector(selectExecutionsLoading);
+  const loadingError = useSelector(selectExecutionsError);
   const [refreshing, setRefreshing] = useState(false);
   const [, forceUpdate] = useState({});
 
@@ -79,6 +85,52 @@ const ExecutionsList: React.FC<{
     return () => clearInterval(refreshTimer);
   }, [checkRunningExecutions]);
 
+  // Show loading indicator while executions are being loaded
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 2, textAlign: 'center' }}>
+        <CircularProgress size={24} sx={{ mb: 1 }} />
+        <Typography variant="body2" color="text.secondary">
+          Loading executions...
+        </Typography>
+      </Box>
+    );
+  }
+
+  // Function for checking all running executions and refreshing the UI
+  const handleRefresh = () => {
+    setRefreshing(true);
+
+    // Check all running executions
+    dispatch({ type: 'digitalTwin/checkAllRunningExecutions' });
+
+    // Add a small delay before ending the refresh state to provide visual feedback
+    setTimeout(() => {
+      forceUpdate({});
+      setRefreshing(false);
+    }, 800); // Slightly longer delay for better visual feedback
+  };
+
+  // Show error message if there was an error loading executions
+  if (loadingError) {
+    return (
+      <Box sx={{ p: 2, textAlign: 'center' }}>
+        <Typography variant="body2" color="error" sx={{ mb: 1 }}>
+          {loadingError}
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<RefreshIcon />}
+          onClick={handleRefresh}
+        >
+          Retry
+        </Button>
+      </Box>
+    );
+  }
+
+  // Show "No executions found" if there are no executions
   if (
     !digitalTwin ||
     !digitalTwin.executions ||
@@ -147,20 +199,6 @@ const ExecutionsList: React.FC<{
     );
     // Force update after removal
     forceUpdate({});
-  };
-
-  // Function for checking all running executions and refreshing the UI
-  const handleRefresh = () => {
-    setRefreshing(true);
-
-    // Check all running executions
-    dispatch({ type: 'digitalTwin/checkAllRunningExecutions' });
-
-    // Add a small delay before ending the refresh state to provide visual feedback
-    setTimeout(() => {
-      forceUpdate({});
-      setRefreshing(false);
-    }, 800); // Slightly longer delay for better visual feedback
   };
 
   type ChipColor =
